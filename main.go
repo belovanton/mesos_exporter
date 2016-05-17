@@ -541,22 +541,9 @@ func (e *periodicExporter) scrapeMaster() {
 
 	err = getJSON(&ms, snapshotURL)
 	if err != nil {
-		metrics = append(metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			0, 
-			"time",
-		))
 		log.Warn(err)
 		return
 	}
-	metrics = append(metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			0, 
-			"time",
-		))
-	
 	for _, mm := range masterMetrics {
 		metricValue, ok := ms[mm.snapshotKey]
 		if !ok {
@@ -571,7 +558,12 @@ func (e *periodicExporter) scrapeMaster() {
 			mm.desc, mm.valueType, metricValue, state.Hostname,
 		))
 	}
-
+	metrics = append(metrics,  prometheus.MustNewConstMetric(
+			MesosUp,
+			prometheus.GaugeValue,
+			float64(1), 
+			"master",
+			))
 	e.Lock()
 	e.metrics = metrics
 	e.Unlock()
