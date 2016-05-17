@@ -24,7 +24,7 @@ var (
 	autoDiscoverInterval = flag.Duration("exporter.discover-interval", 10*time.Minute, "Interval at which to update available slaves from a Mesos Master. Only used if exporter.scrape-mode=discover.")
 	queryURL             = flag.String("exporter.url", "", "The URL of a Mesos Slave, if mode=slave. The URL of a Mesos Master, if mode=discover or mode=master.")
 	metricsPath          = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics")
-	scrapeInterval       = flag.Duration("exporter.interval", 60*time.Second, "Scrape interval duration")
+	scrapeInterval       = flag.Duration("exporter.interval", 10*time.Second, "Scrape interval duration")
 	scrapeMode           = flag.String("exporter.scrape-mode", "", "The mode in which to run the exporter: 'discover', 'master' or 'slave'.")
 )
 
@@ -445,7 +445,18 @@ func (e *periodicExporter) setMetrics(ch chan prometheus.Metric) {
 
 func (e *periodicExporter) scrapeMaster() {
 	stateURL := fmt.Sprintf("%s://%s/master/state", e.queryURL.Scheme, e.queryURL.Host)
-
+	up := float64(1)
+	response, err := http.Get(stateURL)
+    if err != nil {
+        up = 0
+    }
+	if response != nil {}    
+	e.metrics = append(e.metrics, prometheus.MustNewConstMetric(
+			MesosUp,
+			prometheus.GaugeValue,
+			up, 
+			" ",
+	))
 	log.Debugf("Scraping master at %s", stateURL)
 
 	var state masterState
@@ -454,12 +465,6 @@ func (e *periodicExporter) scrapeMaster() {
 	metrics := []prometheus.Metric{}
 	if err != nil {
 		log.Warn(err)
-		metrics = append(metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			0, 
-			" ",
-		))
 		return
 	}
 
