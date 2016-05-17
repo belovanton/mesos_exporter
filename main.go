@@ -508,12 +508,6 @@ func (e *periodicExporter) scrapeMaster() {
 	for _, mm := range masterMetrics {
 		metricValue, ok := ms[mm.snapshotKey]
 		if !ok {
-			e.metrics = append(e.metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			up, 
-			" ",
-				))
 			continue
 		}
 
