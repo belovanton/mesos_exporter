@@ -446,6 +446,7 @@ func (e *periodicExporter) setMetrics(ch chan prometheus.Metric) {
 func (e *periodicExporter) scrapeMaster() {
 	stateURL := fmt.Sprintf("%s://%s/master/state", e.queryURL.Scheme, e.queryURL.Host)
 	up := float64(1)
+	metrics := []prometheus.Metric{}
 	response, err := http.Get(stateURL)
     if err != nil {
         up = 0
@@ -456,14 +457,17 @@ func (e *periodicExporter) scrapeMaster() {
 	var state masterState
 
 	err = getJSON(&state, stateURL)
-	metrics := []prometheus.Metric{}
+
 	if err != nil {
-			e.metrics = append(e.metrics, prometheus.MustNewConstMetric(
+			metrics = append(metrics, prometheus.MustNewConstMetric(
 			MesosUp,
 			prometheus.GaugeValue,
 			up, 
 			" ",
 	))
+		e.Lock()
+		e.metrics = metrics
+		e.Unlock()
 		log.Warn(err)
 		return
 	}
@@ -496,13 +500,17 @@ func (e *periodicExporter) scrapeMaster() {
 
 	err = getJSON(&ms, snapshotURL)
 	if err != nil {
-		e.metrics = append(e.metrics, prometheus.MustNewConstMetric(
+		metrics = append(metrics, prometheus.MustNewConstMetric(
 		MesosUp,
 		prometheus.GaugeValue,
 		up, 
 		" ",
 			))
 		log.Warn(err)
+		e.Lock()
+		e.metrics = metrics
+		e.Unlock()
+
 		return
 	}
 	for _, mm := range masterMetrics {
@@ -519,15 +527,15 @@ func (e *periodicExporter) scrapeMaster() {
 			mm.desc, mm.valueType, metricValue, state.Hostname,
 		))
 	}
-
-	e.Lock()
-	e.metrics = metrics
-	e.metrics = append(e.metrics,  prometheus.MustNewConstMetric(
+	metrics = append(metrics,  prometheus.MustNewConstMetric(
 		MesosUp,
 		prometheus.GaugeValue,
 		up, 
 		" ",
 		))
+
+	e.Lock()
+	e.metrics = metrics
 	e.Unlock()
 }
 
