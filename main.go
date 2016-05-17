@@ -201,7 +201,6 @@ var httpClient = http.Client{
 type exporterOpts struct {
 	autoDiscoverInterval time.Duration
 	interval             time.Duration
-	mode                 string
 	queryURL             string
 }
 
@@ -291,39 +290,14 @@ func newMesosExporter(opts *exporterOpts) *periodicExporter {
 		log.Fatal("Flag '-exporter.url' not set")
 	}
 
-	switch opts.mode {
-	case "discover":
-		log.Info("starting mesos_exporter in scrape mode 'discover'")
-
-		e.queryURL = parseMasterURL(opts.queryURL, e)
-
-		// Update nr. of mesos slaves.
-		e.updateSlaves()
-		go runEvery(e.updateSlaves, e.opts.autoDiscoverInterval)
-
-		// Fetch slave metrics every interval.
-		go runEvery(e.scrapeSlaves, e.opts.interval)
-	case "master":
-		log.Info("starting mesos_exporter in scrape mode 'master'")
-		e.queryURL = parseMasterURL(opts.queryURL, e)
-	case "slave":
-		log.Info("starting mesos_exporter in scrape mode 'slave'")
-		e.slaves.urls = []string{opts.queryURL}
-	default:
-		log.Fatalf("Invalid value '%s' of flag '-exporter.mode' - must be one of 'discover', 'master' or 'slave'", opts.mode)
-	}
+	log.Info("starting mesos_exporter in scrape mode 'master'")
+	e.queryURL = parseMasterURL(opts.queryURL, e)
 
 	return e
 }
 
 func (e *periodicExporter) Describe(ch chan<- *prometheus.Desc) {
-	switch e.opts.mode {
-	case "master":
-		e.scrapeMaster()
-	case "slave":
-		e.scrapeSlaves()
-	}
-
+	e.scrapeMaster()
 	e.rLockMetrics(func() {
 		for _, m := range e.metrics {
 			ch <- m.Desc()
@@ -333,13 +307,7 @@ func (e *periodicExporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *periodicExporter) Collect(ch chan<- prometheus.Metric) {
-	switch e.opts.mode {
-	case "master":
-		e.scrapeMaster()
-	case "slave":
-		e.scrapeSlaves()
-	}
-
+	e.scrapeMaster()
 	e.rLockMetrics(func() {
 		for _, m := range e.metrics {
 			ch <- m
@@ -558,124 +526,6 @@ func (e *periodicExporter) scrapeMaster() {
 	e.Unlock()
 }
 
-func (e *periodicExporter) scrapeSlaves() {
-	
-	e.slaves.Lock()
-	urls := make([]string, len(e.slaves.urls))
-	copy(urls, e.slaves.urls)
-	e.slaves.Unlock()
-
-	urlCount := len(urls)
-	log.Debugf("active slaves: %d", urlCount)
-
-	urlChan := make(chan string)
-	metricsChan := make(chan prometheus.Metric)
-	metricsChan <- prometheus.MustNewConstMetric(
-				MesosUp,
-				prometheus.GaugeValue,
-				1, 
-				"slave",
-			)
-			
-	go e.setMetrics(metricsChan)
-
-	poolSize := concurrentFetch
-	if urlCount < concurrentFetch {
-		poolSize = urlCount
-	}
-
-	log.Debugf("creating fetch pool of size %d", poolSize)
-
-	var wg sync.WaitGroup
-	wg.Add(poolSize)
-	for i := 0; i < poolSize; i++ {
-		go e.fetch(urlChan, metricsChan, &wg)
-			metricsChan <- prometheus.MustNewConstMetric(
-				MesosUp,
-				prometheus.GaugeValue,
-				1, 
-				"slave",
-			)
-			
-	}
-
-	for _, url := range urls {
-		urlChan <- url
-	}
-	close(urlChan)
-
-	wg.Wait()
-	close(metricsChan)
-}
-
-func (e *periodicExporter) updateSlaves() {
-	log.Debug("discovering slaves...")
-
-	// This will redirect us to the elected mesos master
-	redirectURL := fmt.Sprintf("%s://%s/master/redirect", e.queryURL.Scheme, e.queryURL.Host)
-	rReq, err := http.NewRequest("GET", redirectURL, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	tr := http.Transport{
-		DisableKeepAlives: true,
-	}
-	rresp, err := tr.RoundTrip(rReq)
-	if err != nil {
-		log.Warn(err)
-		return
-	}
-	defer rresp.Body.Close()
-
-	// This will/should return http://master.ip:5050
-	masterLoc := rresp.Header.Get("Location")
-	if masterLoc == "" {
-		log.Warnf("%d response missing Location header", rresp.StatusCode)
-		return
-	}
-
-	log.Debugf("current elected master at: %s", masterLoc)
-
-	// Starting from 0.23.0, a Mesos Master does not set the scheme in the "Location" header.
-	// Use the scheme from the master URL in this case.
-	var stateURL string
-	if strings.HasPrefix(masterLoc, "http") {
-		stateURL = fmt.Sprintf("%s/master/state", masterLoc)
-	} else {
-		stateURL = fmt.Sprintf("%s:%s/master/state", e.queryURL.Scheme, masterLoc)
-	}
-
-	var state masterState
-
-	// Find all active slaves
-	err = getJSON(&state, stateURL)
-	if err != nil {
-		log.Warn(err)
-		return
-	}
-
-	var slaveURLs []string
-	for _, slave := range state.Slaves {
-		if slave.Active {
-			// Extract slave port from pid
-			_, port, err := net.SplitHostPort(slave.PID)
-			if err != nil {
-				port = "5051"
-			}
-			url := fmt.Sprintf("http://%s:%s", slave.Hostname, port)
-
-			slaveURLs = append(slaveURLs, url)
-		}
-	}
-
-	log.Debugf("%d slaves discovered", len(slaveURLs))
-
-	e.slaves.Lock()
-	e.slaves.urls = slaveURLs
-	e.slaves.Unlock()
-}
-
 func getJSON(data interface{}, url string) error {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -730,7 +580,6 @@ func main() {
 	opts := &exporterOpts{
 		autoDiscoverInterval: *autoDiscoverInterval,
 		interval:             *scrapeInterval,
-		mode:                 *scrapeMode,
 		queryURL:             strings.TrimRight(*queryURL, "/"),
 	}
 	exporter := newMesosExporter(opts)
