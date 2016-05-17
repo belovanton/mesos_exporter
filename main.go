@@ -308,18 +308,6 @@ func newMesosExporter(opts *exporterOpts) *periodicExporter {
 		e.queryURL = parseMasterURL(opts.queryURL, e)
 	case "slave":
 		log.Info("starting mesos_exporter in scrape mode 'slave'")
-		up := float64(1)
-		response, err := http.Get(opts.queryURL)
-		if err != nil {
-        	up = 0
-    	}
-		if response != nil {}    
-		e.metrics = append(e.metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			up, 
-			"slave",
-		))
 		e.slaves.urls = []string{opts.queryURL}
 	default:
 		log.Fatalf("Invalid value '%s' of flag '-exporter.mode' - must be one of 'discover', 'master' or 'slave'", opts.mode)
@@ -466,12 +454,7 @@ func (e *periodicExporter) fetch(urlChan <-chan string, metricsChan chan<- prome
 				mm.desc, mm.valueType, metricValue, host,
 			)
 		}
-			metricsChan <- prometheus.MustNewConstMetric(
-				MesosUp,
-				prometheus.GaugeValue,
-				0, 
-				"time",
-			)
+
 	}
 }
 
@@ -576,6 +559,7 @@ func (e *periodicExporter) scrapeMaster() {
 }
 
 func (e *periodicExporter) scrapeSlaves() {
+	
 	e.slaves.Lock()
 	urls := make([]string, len(e.slaves.urls))
 	copy(urls, e.slaves.urls)
@@ -586,6 +570,13 @@ func (e *periodicExporter) scrapeSlaves() {
 
 	urlChan := make(chan string)
 	metricsChan := make(chan prometheus.Metric)
+	metricsChan <- prometheus.MustNewConstMetric(
+				MesosUp,
+				prometheus.GaugeValue,
+				1, 
+				"slave",
+			)
+			
 	go e.setMetrics(metricsChan)
 
 	poolSize := concurrentFetch
@@ -599,6 +590,13 @@ func (e *periodicExporter) scrapeSlaves() {
 	wg.Add(poolSize)
 	for i := 0; i < poolSize; i++ {
 		go e.fetch(urlChan, metricsChan, &wg)
+			metricsChan <- prometheus.MustNewConstMetric(
+				MesosUp,
+				prometheus.GaugeValue,
+				1, 
+				"slave",
+			)
+			
 	}
 
 	for _, url := range urls {
