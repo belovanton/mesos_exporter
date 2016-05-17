@@ -542,27 +542,13 @@ func megabytesToBytes(v float64) float64 { return v * 1024 * 1024 }
 
 func parseMasterURL(masterURL string, e *periodicExporter) *url.URL {
 	
-	up := float64(1)
-	response, err := http.Get(masterURL)
-    if err != nil {
-        up = 0
-    }
-	if response != nil {}    
 	parsedMasterURL, err := url.Parse(masterURL)
 	if err != nil {
 		log.Fatalf("unable to parse master URL '%s': ", masterURL, err)
-		up = 0
 	}
 	if strings.HasPrefix(parsedMasterURL.Scheme, "http") == false {
 		log.Fatalf("invalid scheme '%s' in master url - use 'http' or 'https'", parsedMasterURL.Scheme)
-		up = 0
 	}
-	e.metrics = append(e.metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			up, 
-			" ",
-	))
 	return parsedMasterURL
 }
 
