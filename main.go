@@ -458,17 +458,10 @@ func (e *periodicExporter) scrapeMaster() {
 			MesosUp,
 			prometheus.GaugeValue,
 			0, 
-			"time",
+			" ",
 		))
 		return
 	}
-		metrics = append(metrics, prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			1, 
-			"time",
-		))
-
 
 
 	for _, fw := range state.Frameworks {
@@ -519,7 +512,7 @@ func (e *periodicExporter) scrapeMaster() {
 			MesosUp,
 			prometheus.GaugeValue,
 			float64(1), 
-			"master",
+			" ",
 			))
 	e.Lock()
 	e.metrics = metrics
@@ -563,7 +556,7 @@ func parseMasterURL(masterURL string, e *periodicExporter) *url.URL {
 			MesosUp,
 			prometheus.GaugeValue,
 			up, 
-			"master",
+			" ",
 	))
 	return parsedMasterURL
 }
