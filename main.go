@@ -466,6 +466,12 @@ func (e *periodicExporter) fetch(urlChan <-chan string, metricsChan chan<- prome
 				mm.desc, mm.valueType, metricValue, host,
 			)
 		}
+			metricsChan <- prometheus.MustNewConstMetric(
+				MesosUp,
+				prometheus.GaugeValue,
+				0, 
+				"time",
+			)
 	}
 }
 
