@@ -461,7 +461,7 @@ func (e *periodicExporter) scrapeMaster() {
 
 	var state masterState
 
-	err := getJSON(&state, stateURL)
+	err = getJSON(&state, stateURL)
 	metrics := []prometheus.Metric{}
 	if err != nil {
 		log.Warn(err)
