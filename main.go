@@ -519,14 +519,15 @@ func (e *periodicExporter) scrapeMaster() {
 			mm.desc, mm.valueType, metricValue, state.Hostname,
 		))
 	}
-	metrics = append(metrics,  prometheus.MustNewConstMetric(
-			MesosUp,
-			prometheus.GaugeValue,
-			up, 
-			" ",
-			))
+
 	e.Lock()
 	e.metrics = metrics
+	e.metrics = append(e.metrics,  prometheus.MustNewConstMetric(
+		MesosUp,
+		prometheus.GaugeValue,
+		up, 
+		" ",
+		))
 	e.Unlock()
 }
 
